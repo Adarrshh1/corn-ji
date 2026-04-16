@@ -359,6 +359,6 @@ def show_loading():
     """
 
     components.html(html_code, height=800, scrolling=False)
-    time.sleep(9)
+    time.sleep(2.2)
     st.session_state.page = "landing"
     st.rerun()

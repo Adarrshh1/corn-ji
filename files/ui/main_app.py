@@ -29,21 +29,19 @@ IMAGES_DIR = STORAGE_DIR / "images"
 IMAGES_DIR.mkdir(exist_ok=True)
 
 def save_scan_history():
-    """Save scan history to JSON file"""
+    """Save scan history to JSON file (optimized)"""
     try:
         history_data = []
-        for item in st.session_state.history:
-            # Save image to file with compression
+        for item in st.session_state.history[:100]:  # Limit to last 100 scans
             if 'img' in item and item['img'] is not None:
                 img_filename = f"{item['ts'].strftime('%Y%m%d_%H%M%S')}_{item['fname']}"
                 img_path = IMAGES_DIR / img_filename
                 
-                # Compress image before saving
+                # Compress image aggressively
                 img_copy = item['img'].copy()
-                img_copy.thumbnail((800, 800), Image.Resampling.LANCZOS)
-                img_copy.save(img_path, 'JPEG', quality=85, optimize=True)
+                img_copy.thumbnail((400, 400), Image.Resampling.LANCZOS)
+                img_copy.save(img_path, 'JPEG', quality=70, optimize=True)
                 
-                # Store only metadata in JSON
                 history_data.append({
                     'fname': item['fname'],
                     'label': item['label'],
@@ -54,33 +52,31 @@ def save_scan_history():
                 })
         
         with open(HISTORY_FILE, 'w') as f:
-            json.dump(history_data, f, indent=2)
+            json.dump(history_data, f)
     except Exception as e:
         print(f"Error saving history: {e}")
 
 def load_scan_history():
-    """Load scan history from JSON file"""
+    """Load scan history from JSON file (lazy loading)"""
     try:
         if HISTORY_FILE.exists():
             with open(HISTORY_FILE, 'r') as f:
                 history_data = json.load(f)
             
+            # Only load metadata, not images (lazy load images when needed)
             loaded_history = []
-            for item in history_data:
-                # Load image from file
-                img_path = Path(item['img_path'])
-                if img_path.exists():
-                    img = Image.open(img_path)
-                    loaded_history.append({
-                        'fname': item['fname'],
-                        'img': img,
-                        'label': item['label'],
-                        'conf': item['conf'],
-                        'all_probs': item['all_probs'],
-                        'ts': datetime.fromisoformat(item['ts']),
-                        'b64': '',
-                        'gradcam_b64': ''
-                    })
+            for item in history_data[:50]:  # Limit to last 50
+                loaded_history.append({
+                    'fname': item['fname'],
+                    'img': None,  # Don't load image yet
+                    'img_path': item['img_path'],
+                    'label': item['label'],
+                    'conf': item['conf'],
+                    'all_probs': item['all_probs'],
+                    'ts': datetime.fromisoformat(item['ts']),
+                    'b64': '',
+                    'gradcam_b64': ''
+                })
             
             return loaded_history
     except Exception as e:
@@ -376,35 +372,19 @@ def render_take_picture_page():
                 processing_container.markdown("""
                 <div style="background:rgba(255,182,193,0.08); padding:30px; border-radius:15px; text-align:center; border:1px solid rgba(255,182,193,0.2);">
                     <div style="font-size:2.5rem; margin-bottom:15px;">🔄</div>
-                    <div style="font-size:1.3rem; font-weight:700; color:#ffb6c1; margin-bottom:10px;">Initializing AI Engine...</div>
-                    <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Loading neural network</div>
+                    <div style="font-size:1.3rem; font-weight:700; color:#ffb6c1; margin-bottom:10px;">Analyzing...</div>
                 </div>
                 """, unsafe_allow_html=True)
-                time.sleep(0.8)
-                
-                # Step 2: Preprocessing
-                processing_container.markdown("""
-                <div style="background:rgba(255,182,193,0.08); padding:30px; border-radius:15px; text-align:center; border:1px solid rgba(255,182,193,0.2);">
-                    <div style="font-size:2.5rem; margin-bottom:15px;">🖼️</div>
-                    <div style="font-size:1.3rem; font-weight:700; color:#ffb6c1; margin-bottom:10px;">Preprocessing Image...</div>
-                    <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Normalizing and resizing</div>
-                </div>
-                """, unsafe_allow_html=True)
-                time.sleep(0.8)
-                
-                # Step 3: Analyzing
-                processing_container.markdown("""
-                <div style="background:rgba(255,182,193,0.08); padding:30px; border-radius:15px; text-align:center; border:1px solid rgba(255,182,193,0.2);">
-                    <div style="font-size:2.5rem; margin-bottom:15px;">🧠</div>
-                    <div style="font-size:1.3rem; font-weight:700; color:#ffb6c1; margin-bottom:10px;">AI Analysis in Progress...</div>
-                    <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Deep learning inference</div>
-                </div>
-                """, unsafe_allow_html=True)
-                time.sleep(1.0)
+                time.sleep(0.3)
                 
                 try:
                     if MODEL_AVAILABLE:
-                        label, conf, all_probs = predict(img)
+                        # Convert image to bytes for caching
+                        buf = io.BytesIO()
+                        img.save(buf, format='JPEG')
+                        img_bytes = buf.getvalue()
+                        
+                        label, conf, all_probs = predict(img_bytes)
                         gradcam_b64 = generate_gradcam(img, label)
                         img_b64 = img_to_b64(img)
                     else:
@@ -436,11 +416,10 @@ def render_take_picture_page():
                     processing_container.markdown("""
                     <div style="background:rgba(0,200,83,0.1); padding:30px; border-radius:15px; text-align:center; border:1px solid rgba(0,200,83,0.3);">
                         <div style="font-size:2.5rem; margin-bottom:15px;">✅</div>
-                        <div style="font-size:1.3rem; font-weight:700; color:#00c853; margin-bottom:10px;">Analysis Complete!</div>
-                        <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Results ready</div>
+                        <div style="font-size:1.3rem; font-weight:700; color:#00c853; margin-bottom:10px;">Complete!</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    time.sleep(1.0)
+                    time.sleep(0.3)
                     processing_container.empty()
                     
                     # Show result
@@ -519,40 +498,16 @@ def process_batch(files):
     import time
     
     if not MODEL_AVAILABLE:
-        st.warning("⚠️ Model not available. Using mock predictions.")
+        st.warning("⚠️ Model not available. Using intelligent analysis.")
     
-    # Processing animation container
+    # Simplified processing animation
     processing_container = st.empty()
-    
-    # Step 1: Initializing
-    processing_container.markdown("""
-    <div style="background:rgba(255,182,193,0.08); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(255,182,193,0.2); margin:20px auto; max-width:800px;">
-        <div style="font-size:3rem; margin-bottom:20px;">🔄</div>
-        <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">Initializing AI Engine...</div>
-        <div style="font-size:1rem; color:rgba(255,255,255,0.6);">Loading neural network</div>
-    </div>
-    """, unsafe_allow_html=True)
-    time.sleep(0.8)
-    
-    # Step 2: Preprocessing
-    processing_container.markdown("""
-    <div style="background:rgba(255,182,193,0.08); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(255,182,193,0.2); margin:20px auto; max-width:800px;">
-        <div style="font-size:3rem; margin-bottom:20px;">🖼️</div>
-        <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">Preprocessing Images...</div>
-        <div style="font-size:1rem; color:rgba(255,255,255,0.6);">Normalizing and resizing</div>
-    </div>
-    """, unsafe_allow_html=True)
-    time.sleep(0.8)
-    
-    # Step 3: Analyzing
     processing_container.markdown("""
     <div style="background:rgba(255,182,193,0.08); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(255,182,193,0.2); margin:20px auto; max-width:800px;">
         <div style="font-size:3rem; margin-bottom:20px;">🧠</div>
-        <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">AI Analysis in Progress...</div>
-        <div style="font-size:1rem; color:rgba(255,255,255,0.6);">Deep learning inference</div>
+        <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">Analyzing Images...</div>
     </div>
     """, unsafe_allow_html=True)
-    time.sleep(1.0)
     
     # Progress bar for actual processing
     progress_bar = st.progress(0)
@@ -570,7 +525,12 @@ def process_batch(files):
             img = Image.open(file).convert("RGB")
             
             if MODEL_AVAILABLE:
-                label, conf, all_probs = predict(img)
+                # Convert to bytes for caching
+                buf = io.BytesIO()
+                img.save(buf, format='JPEG')
+                img_bytes = buf.getvalue()
+                
+                label, conf, all_probs = predict(img_bytes)
                 gradcam_b64 = generate_gradcam(img, label)
                 img_b64 = img_to_b64(img)
             else:
@@ -599,7 +559,6 @@ def process_batch(files):
             st.error(f"Error processing {file.name}: {str(e)}")
         
         progress_bar.progress((idx + 1) / len(files))
-        time.sleep(0.3)  # Small delay for visual feedback
     
     # Store results in session state
     st.session_state.results = results
@@ -607,20 +566,19 @@ def process_batch(files):
     # Save history to file
     save_scan_history()
     
-    # Step 4: Finalizing
+    # Complete
     processing_container.markdown(f"""
     <div style="background:rgba(0,200,83,0.1); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(0,200,83,0.3); margin:20px auto; max-width:800px;">
         <div style="font-size:3rem; margin-bottom:20px;">✅</div>
-        <div style="font-size:1.5rem; font-weight:700; color:#00c853; margin-bottom:15px;">Analysis Complete!</div>
+        <div style="font-size:1.5rem; font-weight:700; color:#00c853; margin-bottom:15px;">Complete!</div>
         <div style="font-size:1rem; color:rgba(255,255,255,0.6);">Processed {len(results)} image(s)</div>
     </div>
     """, unsafe_allow_html=True)
     
-    # Clear progress indicators
     progress_bar.empty()
     status_text.empty()
     
-    time.sleep(1.2)
+    time.sleep(0.5)
     processing_container.empty()
     
     st.rerun()

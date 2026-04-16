@@ -582,8 +582,11 @@ body {
     # Display the HTML component with reduced height
     components.html(html_content, height=800, scrolling=False)
     
+    # Add small delay to ensure HTML loads
+    time.sleep(0.1)
+    
     # REAL STREAMLIT BUTTON (perfectly centered at bottom)
-    if st.button("🚀 Let's Go", key="hero_go"):
+    if st.button("🚀 Let's Go", key="hero_go", type="primary"):
         st.session_state.page = "main"
         st.session_state.active_page = "scan_leaf"
         st.rerun()

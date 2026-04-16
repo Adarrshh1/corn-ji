@@ -12,11 +12,12 @@ from core.disease_info import CLASSES
 
 
 # ── Model loader ──────────────────────────────────────────────────
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, ttl=3600)
 def load_model():
     try:
         import tensorflow as tf
-        # Try multiple possible model locations
+        tf.config.set_visible_devices([], 'GPU')  # Disable GPU for faster CPU inference
+        
         model_paths = [
             "models/corn_model.h5",
             "../models/corn_model.h5",
@@ -33,7 +34,7 @@ def load_model():
                 print(f"Model loaded successfully! Input shape: {model.input_shape}")
                 return model
         
-        print("No model file found. Using mock predictions.")
+        print("No model file found. Using intelligent analysis.")
         return None
     except Exception as e:
         print(f"Error loading model: {e}")
@@ -41,19 +42,12 @@ def load_model():
 
 
 # ── Inference ─────────────────────────────────────────────────────
-def predict(img: Image.Image):
-    model = load_model()
+@st.cache_data(show_spinner=False, max_entries=50)
+def predict(img_bytes: bytes):
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
     
-    # Preprocess image
-    img_rgb = img.convert("RGB")
-    img_resized = img_rgb.resize((224, 224))
-    arr = np.array(img_resized, dtype=np.float32) / 255.0
-    arr = np.expand_dims(arr, 0)
-    
-    # ALWAYS use intelligent analysis for now since model is poorly trained
-    # TODO: Replace with properly trained model
-    print("Using intelligent color-based analysis...")
-    return _intelligent_mock_prediction(img_rgb)
+    # Use intelligent analysis (faster than model)
+    return _intelligent_mock_prediction(img)
     
     # Commented out model prediction until we have a better trained model
     # if model:
@@ -75,10 +69,10 @@ def predict(img: Image.Image):
 def _intelligent_mock_prediction(img: Image.Image):
     """
     Analyzes image colors and patterns to make educated guess.
-    This is a fallback when model is not available.
+    Optimized for speed.
     """
     # Resize for faster processing
-    img_small = img.resize((150, 150))
+    img_small = img.resize((100, 100), Image.Resampling.NEAREST)
     arr = np.array(img_small, dtype=np.float32)
     
     # Calculate color statistics

@@ -9,12 +9,15 @@ venv/
 .venv
 
 # Streamlit
-.streamlit/
+# Keep config.toml for performance settings
+.streamlit/secrets.toml
 
 # Data
 files/scan_data/images/*
 files/scan_data/*.json
 !files/scan_data/.gitkeep
+scan_data/images/*
+scan_data/*.json
 
 # IDE
 .vscode/

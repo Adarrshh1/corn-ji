@@ -1,0 +1,53 @@
+[server]
+# Reduce max upload size for faster processing
+maxUploadSize = 10
+
+# Disable CORS for local development
+enableCORS = false
+
+# Disable XSRF for faster requests
+enableXsrfProtection = false
+
+# Enable WebSocket compression
+enableWebsocketCompression = true
+
+[browser]
+# Disable usage stats collection
+gatherUsageStats = false
+
+# Server address
+serverAddress = "localhost"
+
+[runner]
+# Enable fast reruns
+fastReruns = true
+
+# Reduce magic enabled for performance
+magicEnabled = false
+
+# Fix for script changes
+fixMatplotlib = true
+
+[client]
+# Show error details
+showErrorDetails = true
+
+# Toolbar mode
+toolbarMode = "minimal"
+
+[theme]
+# Your custom theme (optional)
+primaryColor = "#ffb6c1"
+backgroundColor = "#1a0f0d"
+secondaryBackgroundColor = "#2d1410"
+textColor = "#e8f5e9"
+font = "sans serif"
+
+[logger]
+# Set log level (use "info" for production, "debug" for troubleshooting)
+level = "info"
+
+[deprecation]
+# Disable deprecation warnings for cleaner output
+showfileUploaderEncoding = false
+showPyplotGlobalUse = false
