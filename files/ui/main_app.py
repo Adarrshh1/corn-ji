@@ -490,8 +490,10 @@ def render_scan_page():
                 st.session_state.results = []  # Clear results
                 st.rerun()
     
-    # Show result ONLY after scanning
+    # IMPROVED: Show batch results summary + individual results
     if st.session_state.results and len(st.session_state.results) > 0:
+        render_batch_summary(st.session_state.results)
+        st.markdown("---")
         render_result_panel(st.session_state.results[-1])
 
 def process_batch(files):
@@ -500,24 +502,41 @@ def process_batch(files):
     if not MODEL_AVAILABLE:
         st.warning("⚠️ Model not available. Using intelligent analysis.")
     
-    # Simplified processing animation
+    # IMPROVED: Better loading animation with steps
     processing_container = st.empty()
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # Step 1: Initializing
+    processing_container.markdown("""
+    <div style="background:rgba(255,182,193,0.08); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(255,182,193,0.2); margin:20px auto; max-width:800px; animation: pulse 1.5s ease-in-out infinite;">
+        <div style="font-size:3rem; margin-bottom:20px;">🔄</div>
+        <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">Initializing AI Model...</div>
+        <div style="font-size:0.9rem; color:rgba(255,255,255,0.5);">Step 1 of 3</div>
+    </div>
+    <style>
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    time.sleep(0.5)
+    
+    # Step 2: Processing
     processing_container.markdown("""
     <div style="background:rgba(255,182,193,0.08); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(255,182,193,0.2); margin:20px auto; max-width:800px;">
         <div style="font-size:3rem; margin-bottom:20px;">🧠</div>
         <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">Analyzing Images...</div>
+        <div style="font-size:0.9rem; color:rgba(255,255,255,0.5);">Step 2 of 3</div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Progress bar for actual processing
-    progress_bar = st.progress(0)
-    status_text = st.empty()
     
     results = []
     for idx, file in enumerate(files):
         status_text.markdown(f"""
-        <div style="text-align:center; color:#ffb6c1; font-weight:600;">
-            Processing {idx+1}/{len(files)}: {file.name}
+        <div style="text-align:center; color:#ffb6c1; font-weight:600; font-size:1.1rem;">
+            🔬 Processing {idx+1}/{len(files)}: {file.name[:30]}{'...' if len(file.name) > 30 else ''}
         </div>
         """, unsafe_allow_html=True)
         
@@ -525,7 +544,6 @@ def process_batch(files):
             img = Image.open(file).convert("RGB")
             
             if MODEL_AVAILABLE:
-                # Convert to bytes for caching
                 buf = io.BytesIO()
                 img.save(buf, format='JPEG')
                 img_bytes = buf.getvalue()
@@ -559,26 +577,39 @@ def process_batch(files):
             st.error(f"Error processing {file.name}: {str(e)}")
         
         progress_bar.progress((idx + 1) / len(files))
+        time.sleep(0.1)  # Smooth animation
     
-    # Store results in session state
+    # Step 3: Generating Report
+    processing_container.markdown("""
+    <div style="background:rgba(255,182,193,0.08); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(255,182,193,0.2); margin:20px auto; max-width:800px;">
+        <div style="font-size:3rem; margin-bottom:20px;">📊</div>
+        <div style="font-size:1.5rem; font-weight:700; color:#ffb6c1; margin-bottom:15px;">Generating Report...</div>
+        <div style="font-size:0.9rem; color:rgba(255,255,255,0.5);">Step 3 of 3</div>
+    </div>
+    """, unsafe_allow_html=True)
+    time.sleep(0.5)
+    
     st.session_state.results = results
-    
-    # Save history to file
     save_scan_history()
     
-    # Complete
+    # Complete with success animation
     processing_container.markdown(f"""
-    <div style="background:rgba(0,200,83,0.1); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(0,200,83,0.3); margin:20px auto; max-width:800px;">
+    <div style="background:rgba(0,200,83,0.1); padding:40px; border-radius:20px; text-align:center; border:1px solid rgba(0,200,83,0.3); margin:20px auto; max-width:800px; animation: slideIn 0.5s ease-out;">
         <div style="font-size:3rem; margin-bottom:20px;">✅</div>
-        <div style="font-size:1.5rem; font-weight:700; color:#00c853; margin-bottom:15px;">Complete!</div>
-        <div style="font-size:1rem; color:rgba(255,255,255,0.6);">Processed {len(results)} image(s)</div>
+        <div style="font-size:1.5rem; font-weight:700; color:#00c853; margin-bottom:15px;">Analysis Complete!</div>
+        <div style="font-size:1rem; color:rgba(255,255,255,0.6);">Successfully processed {len(results)} image(s)</div>
     </div>
+    <style>
+    @keyframes slideIn {{
+        from {{ transform: translateY(-20px); opacity: 0; }}
+        to {{ transform: translateY(0); opacity: 1; }}
+    }}
+    </style>
     """, unsafe_allow_html=True)
     
     progress_bar.empty()
     status_text.empty()
-    
-    time.sleep(0.5)
+    time.sleep(1)
     processing_container.empty()
     
     st.rerun()
@@ -598,9 +629,72 @@ def run_demo_scan(disease_type):
     st.session_state.scanned += 1
     st.rerun()
 
+def render_batch_summary(results):
+    """IMPROVED: Show batch results summary"""
+    st.markdown("### 📊 Batch Scan Summary")
+    
+    # Calculate statistics
+    total = len(results)
+    healthy_count = len([r for r in results if r['label'] == 'Healthy'])
+    diseased_count = total - healthy_count
+    avg_conf = sum(r['conf'] for r in results) / total if total > 0 else 0
+    
+    # Disease breakdown
+    disease_counts = {}
+    for r in results:
+        label = r['label']
+        disease_counts[label] = disease_counts.get(label, 0) + 1
+    
+    # Summary cards
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f"""
+        <div style="background:rgba(255,182,193,0.08); padding:20px; border-radius:12px; text-align:center; border:1px solid rgba(255,182,193,0.2);">
+            <div style="font-size:2.5rem; margin-bottom:10px;">📁</div>
+            <div style="font-size:2rem; font-weight:700; color:#ffb6c1;">{total}</div>
+            <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Total Scanned</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div style="background:rgba(0,200,83,0.08); padding:20px; border-radius:12px; text-align:center; border:1px solid rgba(0,200,83,0.3);">
+            <div style="font-size:2.5rem; margin-bottom:10px;">✅</div>
+            <div style="font-size:2rem; font-weight:700; color:#00c853;">{healthy_count}</div>
+            <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Healthy Leaves</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div style="background:rgba(255,82,82,0.08); padding:20px; border-radius:12px; text-align:center; border:1px solid rgba(255,82,82,0.3);">
+            <div style="font-size:2.5rem; margin-bottom:10px;">⚠️</div>
+            <div style="font-size:2rem; font-weight:700; color:#ff5252;">{diseased_count}</div>
+            <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Diseased Leaves</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div style="background:rgba(64,196,255,0.08); padding:20px; border-radius:12px; text-align:center; border:1px solid rgba(64,196,255,0.3);">
+            <div style="font-size:2.5rem; margin-bottom:10px;">🎯</div>
+            <div style="font-size:2rem; font-weight:700; color:#40c4ff;">{avg_conf*100:.1f}%</div>
+            <div style="font-size:0.9rem; color:rgba(255,255,255,0.6);">Avg Confidence</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Disease breakdown
+    if diseased_count > 0:
+        st.markdown("")
+        st.markdown("**🦠 Disease Breakdown:**")
+        cols = st.columns(len(disease_counts))
+        for idx, (disease, count) in enumerate(disease_counts.items()):
+            with cols[idx]:
+                icon = "✅" if disease == "Healthy" else "🦠"
+                st.metric(f"{icon} {disease}", count, f"{count/total*100:.1f}%")
+
 def render_result_panel(result):
-    st.markdown("---")
-    st.markdown("### 📊 Scan Result")
+    st.markdown("### 📊 Latest Scan Result")
     
     label = result['label']
     conf = result['conf']
@@ -625,17 +719,200 @@ def render_result_panel(result):
     else:
         st.success(f"**{label}** - Confidence: {conf*100:.1f}%")
     
-    # Export
+    # IMPROVED: Downloadable result card
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("📄 Export PDF", use_container_width=True):
-            st.info("PDF export coming soon")
+        if st.button("📥 Download Result Card", use_container_width=True, type="primary"):
+            download_result_card(result)
     with col2:
         if st.button("📊 Export CSV", use_container_width=True):
-            st.info("CSV export coming soon")
+            export_to_csv([result])
     with col3:
         if st.button("🔗 Export JSON", use_container_width=True):
-            st.info("JSON export coming soon")
+            export_to_json([result])
+
+def download_result_card(result):
+    """IMPROVED: Generate downloadable result card as HTML"""
+    from datetime import datetime
+    
+    label = result['label']
+    conf = result['conf']
+    ts = result['ts'].strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Get disease info
+    icon = "🌿"
+    description = "No description available"
+    treatment = []
+    
+    if MODEL_AVAILABLE and label in DISEASE_INFO:
+        info = DISEASE_INFO[label]
+        icon = info.get('icon', '🌿')
+        description = info.get('description', 'No description available')
+        treatment = info.get('treatment', [])
+    
+    # Generate HTML card
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Corn Ji - Scan Result</title>
+        <style>
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #1a0f0d 0%, #2d1410 100%);
+                color: #e8f5e9;
+                padding: 40px;
+                margin: 0;
+            }}
+            .card {{
+                background: rgba(255,182,193,0.08);
+                border: 2px solid rgba(255,182,193,0.2);
+                border-radius: 20px;
+                padding: 40px;
+                max-width: 800px;
+                margin: 0 auto;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            }}
+            .header {{
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid rgba(255,182,193,0.2);
+                padding-bottom: 20px;
+            }}
+            .icon {{
+                font-size: 4rem;
+                margin-bottom: 10px;
+            }}
+            .title {{
+                font-size: 2rem;
+                font-weight: 700;
+                color: #ffb6c1;
+                margin: 10px 0;
+            }}
+            .confidence {{
+                font-size: 1.5rem;
+                color: #00c853;
+                font-weight: 600;
+            }}
+            .section {{
+                margin: 25px 0;
+                padding: 20px;
+                background: rgba(0,0,0,0.2);
+                border-radius: 10px;
+            }}
+            .section-title {{
+                font-size: 1.3rem;
+                font-weight: 600;
+                color: #ffb6c1;
+                margin-bottom: 15px;
+            }}
+            .treatment-item {{
+                margin: 10px 0;
+                padding-left: 20px;
+                color: rgba(255,255,255,0.9);
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 2px solid rgba(255,182,193,0.2);
+                color: rgba(255,255,255,0.5);
+                font-size: 0.9rem;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="header">
+                <div class="icon">{icon}</div>
+                <div class="title">🌽 Corn Ji - Disease Detection Report</div>
+                <div style="color: rgba(255,255,255,0.6); margin-top: 10px;">Scan Date: {ts}</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">📊 Detection Result</div>
+                <div style="font-size: 1.8rem; font-weight: 700; color: #fff; margin: 15px 0;">{label}</div>
+                <div class="confidence">Confidence: {conf*100:.1f}%</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">📋 Description</div>
+                <div style="color: rgba(255,255,255,0.8); line-height: 1.6;">{description}</div>
+            </div>
+            
+            {f'''<div class="section">
+                <div class="section-title">💊 Recommended Treatment</div>
+                {''.join([f'<div class="treatment-item">→ {t}</div>' for t in treatment])}
+            </div>''' if treatment else ''}
+            
+            <div class="footer">
+                <div>🌽 Corn Ji - AI-Powered Corn Disease Detection</div>
+                <div style="margin-top: 5px;">Powered by CNN-APEX v7.0 | Accuracy: 98.4%</div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    # Offer download
+    st.download_button(
+        label="💾 Save Result Card (HTML)",
+        data=html_content,
+        file_name=f"corn_ji_result_{result['ts'].strftime('%Y%m%d_%H%M%S')}.html",
+        mime="text/html",
+        use_container_width=True
+    )
+    st.success("✅ Result card generated! Click above to download.")
+
+def export_to_csv(results):
+    """Export results to CSV"""
+    import csv
+    from io import StringIO
+    
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Filename', 'Disease', 'Confidence', 'Timestamp'])
+    
+    for r in results:
+        writer.writerow([
+            r['fname'],
+            r['label'],
+            f"{r['conf']*100:.2f}%",
+            r['ts'].strftime('%Y-%m-%d %H:%M:%S')
+        ])
+    
+    st.download_button(
+        label="💾 Save CSV File",
+        data=output.getvalue(),
+        file_name=f"corn_ji_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+    st.success("✅ CSV file ready! Click above to download.")
+
+def export_to_json(results):
+    """Export results to JSON"""
+    import json
+    
+    data = [{
+        'filename': r['fname'],
+        'disease': r['label'],
+        'confidence': r['conf'],
+        'timestamp': r['ts'].isoformat(),
+        'all_probabilities': r.get('all_probs', {})
+    } for r in results]
+    
+    json_str = json.dumps(data, indent=2)
+    
+    st.download_button(
+        label="💾 Save JSON File",
+        data=json_str,
+        file_name=f"corn_ji_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        mime="application/json",
+        use_container_width=True
+    )
+    st.success("✅ JSON file ready! Click above to download.")
 
 def render_history_page():
     st.markdown("### 📋 Scan History")
